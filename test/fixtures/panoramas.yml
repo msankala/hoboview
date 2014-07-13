@@ -1,0 +1,17 @@
+# Read about fixtures at http://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  title: MyString
+  center: 1.5
+  heading: 1.5
+  copyright: MyString
+  description: MyString
+  image: 
+
+two:
+  title: MyString
+  center: 1.5
+  heading: 1.5
+  copyright: MyString
+  description: MyString
+  image: 

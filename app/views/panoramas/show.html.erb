@@ -1,0 +1,322 @@
+
+<script type="text/javascript">
+var panorama_radius = 200;
+var linksphere_radius = 10;
+var linksphere_opacity = 1.0; // 0.6;
+var rotating_at_this_moment = false;
+var compass_heading = 0;
+var rotate_step = 0.5;
+
+var camera, controls, projector, renderer, scene, sphere, texture;
+var webglEl, bbox, width, height;
+
+var objects = [];
+var spheres = new THREE.Object3D();
+
+var rotateStart = new THREE.Vector2();
+var rotateEnd = new THREE.Vector2();
+var rotateDelta = new THREE.Vector2();
+
+var planeNormal = new THREE.Vector3(0,1,0);
+
+var linkspheres = [];
+<% @panoramas.each do |p| %>
+<%= "linkspheres.push({fid: #{p.id}, title: '#{p.title}', pic: '#{p.image.url(:thumb)}', bearing: #{@panorama.bearing(p)}});".html_safe %>
+<% end %>
+
+
+window.onload = function() {
+  webglEl = document.getElementById('sphere');
+  bbox = webglEl.getBoundingClientRect();
+  width = bbox.width;
+  height = width / 2;
+  init();
+  webglEl.addEventListener('mousewheel', onMouseWheel, false);
+  webglEl.addEventListener('mousedown', onDocumentMouseDown, false);
+  webglEl.addEventListener('mousemove', onDocumentMouseMove, false);
+  webglEl.addEventListener('DOMMouseScroll', onMouseWheel, false);
+};
+
+function init() {
+  scene = new THREE.Scene();
+
+  camera = new THREE.PerspectiveCamera(70, width / height, 0.1, 1.1*panorama_radius);
+  camera.position.x = 0.1;
+  scene.add(camera);
+
+  renderer = Detector.webgl ? new THREE.WebGLRenderer() : new THREE.CanvasRenderer();
+  renderer.setSize(width, height);
+
+  texture = THREE.ImageUtils.loadTexture('http://<%= request.host_with_port %><%= Hoboview::Application.config.relative_url_root || "" %><%= @panorama.image.url %>');
+  sphere = new THREE.Mesh(
+    new THREE.SphereGeometry(panorama_radius, 30, 30),
+    new THREE.MeshBasicMaterial({
+      map: texture
+    })
+  );
+  sphere.rotation.y = (Math.PI / 180 * -<%= @panorama.center %>);
+  sphere.scale.x = -1;
+  scene.add(sphere);
+
+  scene.add( new THREE.AmbientLight( 0x404040 ) ); // soft white light
+  scene.add( new THREE.AmbientLight( 0x404040 ) ); // soft white light
+  scene.add( new THREE.AmbientLight( 0x404040 ) ); // soft white light
+
+  controls = new THREE.OrbitControls(camera, webglEl);
+  controls.noPan = true;
+  controls.noZoom = true;
+  controls.autoRotate = false;
+  controls.autoRotateSpeed = 0;
+
+  for(var i = linkspheres.length - 1; i >= 0; i--) {
+    var bearing = linkspheres[i].bearing;
+    var pic = 'http://<%= request.host_with_port %><%= Hoboview::Application.config.relative_url_root || "" %>'+linkspheres[i].pic;
+    var title = linkspheres[i].title;
+    var fid = linkspheres[i].fid;
+
+    var sprite = new THREE.Mesh(
+      new THREE.SphereGeometry(linksphere_radius, 10, 10),
+      new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(pic) })
+    );
+    sprite.name = title;
+    sprite.fid = fid;
+    sprite.bearing = bearing;
+
+    var v1 = new THREE.Vector3(-1,0,0);
+    v1.applyAxisAngle(new THREE.Vector3(0,1,0), -deg2rad(bearing));
+    v1.setLength(180);
+    sprite.position = v1;
+    sprite.orig_pos = v1.clone();
+    sprite.material.transparent = true;
+    sprite.material.opacity = linksphere_opacity;
+    sprite.callback = function() {window.open("http://<%= request.host_with_port %><%= Hoboview::Application.config.relative_url_root || "" %>/panoramas/"+this.fid,"_self")}
+    objects.push(sprite);
+//    scene.add(sprite);
+  }
+
+  //Iterate objects twice in case first and last intersect
+  for(var i = objects.length * 2 - 1; i >= 0; i--) { 
+    var sprite = objects[i % objects.length];
+    console.info(sprite.name);
+    var iterations = 0;
+    do {
+      iterations++;
+      console.log("Iter:"+iterations);
+      var collisions = false;
+      for(var j = 0; j < spheres.children.length; j++) {
+        var ob = spheres.children[j];
+        var last_ob = spheres.children[spheres.children.length - 1];
+//        console.log("Compared to: "+ob.name);
+//        if(sprite.orig_pos.angleTo(last_ob.orig_pos)) {
+//          collisions = true;
+//        }
+        while(ob.position.distanceToSquared(sprite.position) < Math.pow(2*linksphere_radius,2)) {
+          collisions = true;
+          if(Math.abs(last_ob.position.y) > 0.1 && sprite.position.y == 0) {
+            var ang = last_ob.orig_pos.angleTo(last_ob.position);
+            if(sprite.direction == undefined) {
+              sprite.direction = (last_ob.position.y - last_ob.orig_pos.y) > 0 ? (-1) : (1);
+            }
+            sprite.position = rotateSprite(sprite, sprite.direction*ang);
+            //console.log("Dir:"+sprite.direction);
+          }
+          else {
+            //if(ob.position.y >= sprite.position.y && sprite.direction != 1) {
+            if(sprite.direction != 1) {
+              if(sprite.direction == undefined) { sprite.direction = -1; }
+              sprite.position = rotateSprite(sprite, -deg2rad(rotate_step));
+              rotateObject(spheres, deg2rad(rotate_step));
+            }
+            else {
+              if(sprite.direction == undefined) { sprite.direction = 1; }
+              sprite.position = rotateSprite(sprite, deg2rad(rotate_step));
+              rotateObject(spheres, -deg2rad(rotate_step));
+            }
+          }
+        }
+      }
+    } while(collisions && iterations < 5);
+    spheres.add(sprite);
+    if(collisions == false && iterations == 1) {
+      for (var k = spheres.children.length - 2; k >= 0; k--) {
+        var sp = spheres.children[k]
+        if(Math.abs(parseFloat(sprite.bearing) - parseFloat(sp.bearing)) > 13 * (spheres.children.length - k - 1)) {
+          spheres.remove(sp);
+        }
+      }
+    }
+  }
+  spheres.children = objects;
+  scene.add(spheres);
+
+//  var material = new THREE.LineBasicMaterial({color: 0x0000ff});
+//  var geometry = new THREE.Geometry();
+//  geometry.vertices.push(new THREE.Vector3(0, 0, 0));
+//  geometry.vertices.push(new THREE.Vector3(-200, 0, 0));
+//  var line = new THREE.Line(geometry, material);
+//  scene.add(line);
+
+  webglEl.appendChild(renderer.domElement);
+
+  projector = new THREE.Projector();
+
+  render();
+}
+
+function render() {
+  controls.update();
+  requestAnimationFrame(render);
+  renderer.render(scene, camera);
+}
+
+function onMouseWheel(event) {
+  event.preventDefault();
+
+  if (event.wheelDeltaY) { // WebKit
+    camera.fov -= event.wheelDeltaY * 0.05;
+  } else if (event.wheelDelta) {  // Opera / IE9
+    camera.fov -= event.wheelDelta * 0.05;
+  } else if (event.detail) { // Firefox
+    camera.fov += event.detail * 1.0;
+  }
+
+  camera.fov = Math.max(40, Math.min(100, camera.fov));
+  camera.updateProjectionMatrix();
+}
+
+function onDocumentMouseDown(event) {
+  event.preventDefault();
+  var mouseX = event.clientX - bbox.left;
+  var mouseY = event.clientY - bbox.top + $(document).scrollTop();
+  var maxWid = width;
+  var maxHei = height;
+  var vector = new THREE.Vector3(
+      ( mouseX / maxWid ) * 2 - 1,
+      - ( mouseY / maxHei ) * 2 + 1,
+      0.5 );
+
+  projector.unprojectVector( vector, camera );
+  var ray = new THREE.Raycaster( camera.position, vector.sub( camera.position ).normalize() );
+  var tmpv = new THREE.Vector3(ray.ray.direction.x, ray.ray.direction.y, ray.ray.direction.z);
+  tmpv.setLength(200);
+  //console.log(tmpv);
+
+  var intersects = ray.intersectObjects( objects );
+  if ( intersects.length > 0 && intersects[0].object.visible == true ) {
+    intersects[0].object.callback();
+  }
+
+  rotating_at_this_moment = true;
+  rotateStart.set( event.clientX, event.clientY );
+
+  webglEl.addEventListener('mouseup', onDocumentMouseUp, false);
+
+}
+
+function onDocumentMouseMove(event) {
+  if(rotating_at_this_moment == false) {
+    var mouseX = event.clientX - $("#sphere").offset().left;
+    var mouseY = event.clientY - $("#sphere").offset().top + $(document).scrollTop();
+    var maxWid = width;
+    var maxHei = height;
+    var vector = new THREE.Vector3(
+      ( mouseX / maxWid ) * 2 - 1,
+      - ( mouseY / maxHei ) * 2 + 1,
+      0.5 );
+
+    projector.unprojectVector( vector, camera );
+    var ray = new THREE.Raycaster( camera.position, vector.sub( camera.position ).normalize() );
+
+    var intersects = ray.intersectObjects( objects );
+    if ( intersects.length > 0 && intersects[0].object.visible == true ) {
+      $("#sphere").css('cursor', 'pointer');
+      intersects[0].object.material.opacity = 1.0;
+      intersects[0].object.position = intersects[0].object.position.setLength(100);
+      $("#link").html(intersects[0].object.name);
+    } else {
+      $("#sphere").css('cursor', 'default');
+      $("#link").html("");
+    }
+    for (var i = objects.length - 1; i >= 0; i--) {
+      if(intersects.length == 0 || (objects[i] != intersects[0].object && objects[i].material.opacity == 1)) {
+        objects[i].material.opacity = linksphere_opacity;
+        objects[i].position = objects[i].position.setLength(180);
+      }
+    }
+
+  } else {
+    rotateEnd.set( event.clientX, event.clientY );
+    rotateDelta.subVectors( rotateEnd, rotateStart );
+
+    rotate_compass(rotateDelta.x);
+
+    rotateStart.copy( rotateEnd );
+  }
+}
+
+function onDocumentMouseUp(event) {
+  rotating_at_this_moment = false;
+  webglEl.removeEventListener('mouseup', onDocumentMouseUp, false);
+}
+
+function rotate_compass(delta) {
+  var compass = document.getElementById("compass");
+  compass_heading -= 360 * delta / width;
+  if(compass_heading < 0) {compass_heading += 360;}
+  if(compass_heading > 360) {compass_heading -= 360;}
+  var compass_rotation = 360-compass_heading;
+  compass.style.mozTransform    = "rotate("+compass_rotation+"deg)";
+  compass.style.msTransform     = "rotate("+compass_rotation+"deg)";
+  compass.style.webkitTransform = "rotate("+compass_rotation+"deg)";
+  compass.style.oTransform      = "rotate("+compass_rotation+"deg)";
+  compass.style.transform       = "rotate("+compass_rotation+"deg)";
+}
+
+function rotateSprite(sprite, angle, log=true) {
+  //if(log) {console.log(sprite.name+"("+sprite.direction+")"+": "+rad2deg(angle));}
+  var vector = sprite.position.clone();
+  var v_orig = sprite.orig_pos.clone().normalize();
+  var normal = new THREE.Vector3(0,1,0);
+  var cross = new THREE.Vector3();
+  cross.crossVectors(v_orig, normal);
+  vector.applyAxisAngle(cross, angle);
+  return vector;
+}
+
+function rotateObject(obj_container, angle) {
+  for(var xxx = 0; xxx < obj_container.children.length; xxx++) {
+    obj_container.children[xxx].position = rotateSprite(obj_container.children[xxx], angle, false);
+  }
+}
+
+function toggleSpheres() {
+  spheres.traverse( function(obj) {
+    if(obj.visible == false) {
+      obj.visible = true;
+    }
+    else {
+      obj.visible = false;
+    }
+    $('#green').toggle(obj.visible);
+    $('#red').toggle(!obj.visible);
+  });
+}
+</script>
+<h1><%= @panorama.title %></h1>
+<div id="compass"><%= image_tag 'Simple_compass_rose.png' %></div>
+
+<div id="sphere"></div>
+<div id="link"></div>
+<div class="row">
+  <div class="large-4 columns">
+    <%= link_to 'Edit', edit_panorama_path(@panorama) %> |
+    <%= link_to 'Back', panoramas_path %> |
+  </div>
+  <div class="large-4 columns">
+    <container class="center">
+      <%= link_to 'Spheres', 'javascript:toggleSpheres();' %>
+      <span style="color:#f00;display:none" id="red">OFF</span>
+      <span style="color:#0f0" id="green">ON</span>
+    </container>
+</div>  <div class="large-4 columns"><span class="right">&copy; <%= @panorama.copyright %></span></div>
+</div>

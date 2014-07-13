@@ -1,0 +1,30 @@
+<h1>Listing panoramas</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>Title</th>
+      <th>Copyright</th>
+      <th>Description</th>
+      <th>Image</th>
+      <th colspan="2"></th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <% @panoramas.each do |panorama| %>
+      <tr>
+        <td><%= panorama.title %></td>
+        <td><%= panorama.copyright %></td>
+        <td><%= panorama.description %></td>
+        <td><%= link_to image_tag(panorama.image.url(:thumb)), panorama %></td>
+        <td><%= link_to 'Edit', edit_panorama_path(panorama) if policy(panorama).edit? %></td>
+        <td><%= link_to 'Destroy', panorama, method: :delete, data: { confirm: 'Are you sure?' } if policy(panorama).destroy? %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<br>
+
+<%= link_to 'New Panorama', new_panorama_path if policy(Panorama.new).new? %>

@@ -1,0 +1,241 @@
+<%= semantic_form_for(@panorama) do |f| %>
+  <% if @panorama.errors.any? %>
+    <div id="error_explanation">
+      <h2><%= pluralize(@panorama.errors.count, "error") %> prohibited this panorama from being saved:</h2>
+
+      <ul>
+      <% @panorama.errors.full_messages.each do |msg| %>
+        <li><%= msg %></li>
+      <% end %>
+      </ul>
+    </div>
+  <% end %>
+<div class="row">
+  <div class="row collapse">
+    <div class="small-2 columns"><%= f.label :title, class: 'prefix' %></div>
+    <div class="small-10 columns"><%= f.text_field :title %></div>
+  </div>
+  <div class="row collapse">
+    <div class="small-2 columns"><%= f.label :copyright, class: 'prefix' %></div>
+    <div class="small-10 columns"><%= f.text_field :copyright %></div>
+  </div>
+  <div class="row collapse">
+    <div class="small-2 columns"><%= f.label :description, class: 'prefix' %></div>
+    <div class="small-10 columns"><%= f.text_field :description %></div>
+  </div>
+<%= f.inputs "Panorama location" do %>
+  <div>Drag marker to correct location.</div>
+
+  <container class="row">
+    <%= map(center: {
+            latlng: [@panorama.lat, @panorama.lon],
+            zoom: 14
+          },
+          markers: [{
+            latlng: [@panorama.lat, @panorama.lon],
+            draggable: true,
+            dragend: 'panorama_dragend'
+          }]
+        )
+    %>
+    <div class="row collapse large-6 columns">
+      <div class="small-2 columns"><%= f.label :lat, class: 'prefix' %></div>
+      <div class="small-10 columns"><%= f.text_field :lat %></div>
+    </div>
+    <div class="row collapse large-6 columns">
+      <div class="small-2 columns"><%= f.label :lon, class: 'prefix' %></div>
+      <div class="small-10 columns"><%= f.text_field :lon %></div>
+    </div>
+  </container>
+<% end %>
+<%= f.inputs "Other parameters" do %>
+  <container class="row">
+    <div id="wizard" style="display:none">
+      <div id="sphere"></div>
+      <div>Rotate view until red line is at known direction and write degrees to the field below.</div>
+      <div class="row collapse">
+        <div class="small-2 columns">
+          <label class="prefix" label-for="head">Direction at red line:</label>
+        </div>
+        <div class="small-9 columns">
+          <input type="text" name="head" id="head" />
+        </div>
+        <div class="small-1 columns"><a id="wizard_done" class="postfix button">Update</a></div>
+      </div>
+      </div>
+    </div>
+    <div class="row collapse">
+      <div class="small-2 columns"><%= f.label :center, class: 'prefix' %></div>
+      <div class="small-9 columns"><%= f.text_field :center, title: "Direction of the center of panorama. Click ? to open a wizard." %></div>
+      <div class="small-1 columns"><span id="wizard_toggle" class="postfix" title="Direction of the center of panorama. Click to open a wizard.">?</span></div>
+    </div>
+  </container>
+  <div class="row collapse">
+    <div class="small-2 columns"><%= f.label :heading, class: 'prefix' %></div>
+    <div class="small-10 columns"><%= f.text_field :heading, title: "Default direction of the panorama when viewed. (optional)" %></div>
+  </div>
+
+<% end %>
+  <div class="actions">
+    <%= f.submit %>
+  </div>
+</div>
+<% end %>
+  <script type="text/javascript">
+
+  function deg2rad(ang) {
+    return ang * Math.PI/180;
+  }
+  function rad2deg(ang) {
+    return ang * 180/Math.PI;
+  }
+
+  var panorama_radius = 200;
+  var linksphere_radius = 10;
+
+  var camera, controls, projector, renderer, scene, sphere, texture;
+
+  var rotating_at_this_moment = false;
+  var compass_heading = 0;
+
+  var rotateStart = new THREE.Vector2();
+  var rotateEnd = new THREE.Vector2();
+  var rotateDelta = new THREE.Vector2();
+
+  var webglEl, bbox, width, height;
+
+  var line;
+
+  //window.onload = function() {
+  $(document).ready(function() {
+    $("#wizard_toggle").on('click', function(e) {
+      $("#wizard").toggle({duration: 400, easing: 'swing', complete: function() {
+        if(scene == undefined) {
+          run_three();
+        }
+      }});
+      if($("#head").val() == "") {
+        $("#head").val(compass_heading);
+      }
+    });
+    $("#wizard_done").on('click', function(e) {
+      $("#panorama_center").val(($("#head").val() - compass_heading - rad2deg(sphere.rotation.y) +720) % 360);
+      $("#wizard").hide();
+      return false;
+    });
+
+  });
+  function run_three() {
+    webglEl = document.getElementById('sphere');
+    bbox = webglEl.getBoundingClientRect();
+    width = bbox.width;
+    height = width / 2;
+    init();
+    webglEl.addEventListener('mousewheel', onMouseWheel, false);
+    webglEl.addEventListener('mousedown', onDocumentMouseDown, false);
+    webglEl.addEventListener('DOMMouseScroll', onMouseWheel, false);
+  }
+
+  function init() {
+    scene = new THREE.Scene();
+
+    camera = new THREE.PerspectiveCamera(70, width / height, 0.1, 1.1*panorama_radius);
+    camera.position.x = 0.001;
+    scene.add(camera);
+
+    renderer = Detector.webgl ? new THREE.WebGLRenderer() : new THREE.CanvasRenderer();
+    renderer.setSize(width, height);
+
+    texture = THREE.ImageUtils.loadTexture('<%= @panorama.image.url %>');
+    sphere = new THREE.Mesh(
+      new THREE.SphereGeometry(panorama_radius, 30, 30),
+      new THREE.MeshBasicMaterial({
+        map: texture
+      })
+    );
+    sphere.rotation.y = -deg2rad(<%= @panorama.center %>);
+    sphere.scale.x = -1;
+    scene.add(sphere);
+
+    var line_geom = new THREE.Geometry();
+    line_geom.vertices.push(new THREE.Vector3(-180,-200,0));
+    line_geom.vertices.push(new THREE.Vector3(-180,200,0));
+    line = new THREE.Line(line_geom,
+                          new THREE.LineBasicMaterial({ color: 0xff0000 }));
+    scene.add(line);
+
+    controls = new THREE.OrbitControls(camera, webglEl);
+    controls.noPan = true;
+    controls.noZoom = true;
+    controls.autoRotate = false;
+    controls.autoRotateSpeed = 0;
+
+    webglEl.appendChild(renderer.domElement);
+
+    projector = new THREE.Projector();
+
+    render();
+  }
+
+  function render() {
+    controls.update();
+    requestAnimationFrame(render);
+    renderer.render(scene, camera);
+  }
+
+  function onMouseWheel(event) {
+    event.preventDefault();
+
+    if (event.wheelDeltaY) { // WebKit
+      camera.fov -= event.wheelDeltaY * 0.05;
+    } else if (event.wheelDelta) {  // Opera / IE9
+      camera.fov -= event.wheelDelta * 0.05;
+    } else if (event.detail) { // Firefox
+      camera.fov += event.detail * 1.0;
+    }
+
+    camera.fov = Math.max(40, Math.min(100, camera.fov));
+    camera.updateProjectionMatrix();
+  }
+
+  function onDocumentMouseDown(event) {
+    event.preventDefault();
+    rotating_at_this_moment = true;
+    rotateStart.set( event.clientX, event.clientY );
+
+    webglEl.addEventListener('mousemove', onDocumentMouseMove, false);
+    webglEl.addEventListener('mouseup', onDocumentMouseUp, false);
+  }
+
+  function onDocumentMouseMove(event) {
+  if(rotating_at_this_moment == false) {}
+  else {
+    rotateEnd.set( event.clientX, event.clientY );
+    rotateDelta.subVectors( rotateEnd, rotateStart );
+
+    rotate_compass(rotateDelta.x);
+    rotate_hairline(rotateDelta);
+
+    rotateStart.copy( rotateEnd );
+  }
+}
+
+  function onDocumentMouseUp(event) {
+    rotating_at_this_moment = false;
+    webglEl.removeEventListener('mouseup', onDocumentMouseUp, false);
+  }
+
+  function rotate_hairline(delta) {
+    line.rotation.y += 2 * Math.PI * delta.x / width;
+    line.rotation.z -= 2 * Math.PI * delta.y / height;
+    if(Math.abs(line.rotation.z) > Math.PI / 2) {
+      line.rotation.z = line.rotation.z / Math.abs(line.rotation.z) * Math.PI / 2;
+    }
+ //   sphere.rotation.y += 2 * Math.PI * delta.x / width;
+  }
+  function rotate_compass(delta) {
+    compass_heading -= 360 * delta / width;
+    if(compass_heading < 0) {compass_heading += 360;}
+    if(compass_heading > 360) {compass_heading -= 360;}
+  }
+  </script>
