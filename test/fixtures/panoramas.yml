@@ -4,14 +4,24 @@ one:
   title: MyString
   center: 1.5
   heading: 1.5
+  lon: 28.02
+  lat: 62.01
   copyright: MyString
   description: MyString
-  image: 
+  image_file_name: filename.jpg
+  image_file_size: 1024000
+  image_content_type: image/jpeg
+  image_updated_at: 2014-07-10 10:10:11
 
 two:
   title: MyString
   center: 1.5
   heading: 1.5
+  lon: 28.02
+  lat: 62.01
   copyright: MyString
   description: MyString
-  image: 
+  image_file_name: filename.jpg
+  image_file_size: 1024000
+  image_content_type: image/jpeg
+  image_updated_at: 2014-07-10 10:10:11
