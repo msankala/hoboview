@@ -13,8 +13,8 @@ class PanoramasController < ApplicationController
   def show
     authorize @panorama
 
-    @panoramas = Panorama.where('id <> ?', @panorama.id).where('lon <> 0 AND lat <> 0')
-    @panoramas = @panoramas.sort {|a,b| @panorama.bearing(a) <=> @panorama.bearing(b)}
+    @linkspheres = Panorama.links(@panorama)
+    @linkspheres = @linkspheres.sort {|a,b| @panorama.bearing(a) <=> @panorama.bearing(b)}
   end
 
   # GET /panoramas/new

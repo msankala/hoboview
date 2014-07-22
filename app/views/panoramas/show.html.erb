@@ -6,7 +6,6 @@ var linksphere_opacity = 1.0; // 0.6;
 var linksphere_distance = 180;
 var rotating_at_this_moment = false;
 var compass_heading = 0;
-var rotate_step = 1;
 
 var camera, controls, projector, renderer, scene, panorama_sphere, texture;
 var webglEl, bbox, width, height;
@@ -21,7 +20,7 @@ var rotateDelta = new THREE.Vector2();
 var planeNormal = new THREE.Vector3(0,1,0);
 
 var linkspheres = [];
-<% @panoramas.each do |p| %>
+<% @linkspheres.each do |p| %>
 <%= "linkspheres.push({fid: #{p.id}, title: '#{p.title}', pic: '#{p.image.url(:thumb)}', bearing: #{@panorama.bearing(p)}});".html_safe %>
 <% end %>
 
@@ -83,91 +82,17 @@ function init() {
     linksphere.fid = fid;
     linksphere.bearing = bearing;
 
-    var v1 = new THREE.Vector3(-1,0,0);
-    v1.applyAxisAngle(planeNormal, -deg2rad(bearing));
-    v1.setLength(linksphere_distance);
-    linksphere.position.set(v1.x,v1.y,v1.z);
-    linksphere.orig_pos = v1.normalize();
+    var angle = 45*Math.random();
+    var direction = i % 2 == 0 ? -1 : 1;
+    var rotate_vector = rotateVector(linksphere, direction*deg2rad(angle));
+    rotate_vector.setLength(linksphere_distance);
+    linksphere.position.set(rotate_vector.x,rotate_vector.y,rotate_vector.z);
+    //linksphere.orig_pos = rotate_vector.normalize();
     linksphere.material.transparent = true;
     linksphere.material.opacity = linksphere_opacity;
     linksphere.callback = function() {window.open("<%= Hoboview::Application.config.relative_url_root || "" %>/panoramas/"+this.fid,"_self");}
     objects.push(linksphere);
     console.log(linksphere);
-  }
-
-  //Iterate some objects twice in case first and last intersect
-  for(var i = objects.length; i >= 0; i--) { 
-    var linksphere = objects[i % objects.length];
-    console.log(linksphere.name);
-    var iterations = 0;
-    do {
-      iterations++;
-      var collisions = false;
-//      for(var j = 0; j < spheres.children.length; j++) {
-      for(var j = spheres.children.length -1; j>= 0; j--) {
-        var ob = spheres.children[j];
-        if(linksphere == ob) continue;
-        //console.log('  '+ob.name);
-        var last_ob = spheres.children[spheres.children.length - 1];
-        if(linksphere.direction == undefined) {
-          linksphere.direction = (last_ob.direction == 1) ? (-1) : (1);
-          if(last_ob.direction == undefined) {
-            last_ob.direction = (linksphere.direction == 1) ? (-1) : (1);
-          }
-        }
-        //while(ob.position.distanceToSquared(linksphere.position) < Math.pow(2*linksphere_radius,2)) {
-        if(ob.position.distanceToSquared(linksphere.position) < Math.pow(2*linksphere_radius,2)) {
-          collisions = true;
-
-          var ang = ob.position.angleTo(linksphere.position);
-          var rotate_angle = 0.5*Math.sqrt(13*13 - ang*ang);
-          var v1 = rotateSprite(linksphere, linksphere.direction*rotate_angle);
-          linksphere.position.set(v1.x,v1.y,v1.z);
-          rotateObject(spheres, -1*linksphere.direction*deg2rad(rotate_angle));
-
-          /*
-          if(Math.abs(last_ob.position.y) > 0.1 && linksphere.position.y == 0) {
-            var ang = last_ob.orig_pos.angleTo(last_ob.position);
-            if(linksphere.direction == undefined) {
-              linksphere.direction = (last_ob.position.y - last_ob.orig_pos.y) > 0 ? (-1) : (1);
-              console.log("SET Dir 1 "+linksphere.name +" "+linksphere.direction);
-            }
-            var v1 = rotateSprite(linksphere, linksphere.direction*ang);
-            linksphere.position.set(v1.x,v1.y,v1.z);
-          }
-          else {
-            if(linksphere.direction != 1) {
-              if(linksphere.direction == undefined) { 
-                linksphere.direction = -1; 
-                console.log("SET Dir 2 "+linksphere.name +" "+linksphere.direction);
-              }
-              var v1 = rotateSprite(linksphere, linksphere.direction*deg2rad(rotate_step));
-              linksphere.position.set(v1.x,v1.y,v1.z);
-              rotateObject(spheres, deg2rad(rotate_step));
-            }
-            else {
-              if(linksphere.direction == undefined) { 
-                linksphere.direction = 1;
-                console.log("SET Dir 3 "+linksphere.name +" "+linksphere.direction);
-              }
-              var v1 = rotateSprite(linksphere, linksphere.direction*deg2rad(rotate_step));
-              linksphere.position.set(v1.x,v1.y,v1.z);
-              rotateObject(spheres, -deg2rad(rotate_step));
-            }
-          }*/
-        }
-      }
-    } while(collisions && iterations < 5);
-    spheres.add(linksphere);
-
-    if(collisions == false && iterations == 1) {
-      for (var k = spheres.children.length - 2; k >= 0; k--) {
-        var sp = spheres.children[k]
-        if(Math.abs(parseFloat(linksphere.bearing) - parseFloat(sp.bearing)) > 13 * (spheres.children.length - k - 1)) {
-          spheres.remove(sp);
-        }
-      }
-    }
   }
   spheres.children = objects;
   scene.add(spheres);
@@ -295,14 +220,15 @@ function rotate_compass(delta) {
   compass.style.transform       = "rotate("+compass_rotation+"deg)";
 }
 
-function rotateSprite(sprite, angle, log=true) {
+function rotateVector(sprite, angle, log=true) {
 //  if(log) {console.log(sprite.name+"("+sprite.direction+")"+": "+rad2deg(angle));}
-  var vector = sprite.position.clone();
-  var v_orig = sprite.orig_pos;
+  var v1 = new THREE.Vector3(-1,0,0);
+  v1.applyAxisAngle(planeNormal, -deg2rad(sprite.bearing));
+
   var normal = planeNormal.clone();
-  normal.cross(v_orig);
-  vector.applyAxisAngle(normal, angle);
-  return vector;
+  normal.cross(v1.clone());
+  v1.applyAxisAngle(normal, angle);
+  return v1;
 }
 
 function rotateObject(obj_container, angle) {

@@ -4,6 +4,8 @@ class Panorama < ActiveRecord::Base
   validates_attachment_content_type :image, :content_type => /\Aimage\/.*\Z/
   after_image_post_process :read_write_exif
 
+  scope :links, ->(panorama) { where('id <> ?', panorama.id).where('lon <> 0 AND lat <> 0')}
+
   def read_exif
     @exif = EXIFR::JPEG.new(image.queued_for_write[:original].path)
   end
