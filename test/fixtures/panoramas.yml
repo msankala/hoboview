@@ -8,10 +8,11 @@ one:
   lat: 62.01
   copyright: MyString
   description: MyString
-  image_file_name: filename.jpg
-  image_file_size: 1024000
-  image_content_type: image/jpeg
-  image_updated_at: 2014-07-10 10:10:11
+#  image_file_name: filename.jpg
+#  image_file_size: 1024000
+#  image_content_type: image/jpeg
+#  image_updated_at: 2014-07-10 10:10:11
+  user_id: 1
 
 two:
   title: MyString
@@ -21,7 +22,8 @@ two:
   lat: 62.01
   copyright: MyString
   description: MyString
-  image_file_name: filename.jpg
-  image_file_size: 1024000
-  image_content_type: image/jpeg
-  image_updated_at: 2014-07-10 10:10:11
+#  image_file_name: filename.jpg
+#  image_file_size: 1024000
+#  image_content_type: image/jpeg
+#  image_updated_at: 2014-07-10 10:10:11
+  user_id: 1

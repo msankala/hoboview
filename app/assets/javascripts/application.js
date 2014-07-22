@@ -14,7 +14,7 @@
 //= require jquery_ujs
 //= require leaflet
 //= require foundation
-//= require three-r67.min
+//= require three-r68
 //= require Detector
 //= require controls/OrbitControls
 //= require_tree .

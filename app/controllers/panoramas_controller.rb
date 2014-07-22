@@ -12,7 +12,8 @@ class PanoramasController < ApplicationController
   # GET /panoramas/1.json
   def show
     authorize @panorama
-    @panoramas = Panorama.where('id <> ?', @panorama.id)
+
+    @panoramas = Panorama.where('id <> ?', @panorama.id).where('lon <> 0 AND lat <> 0')
     @panoramas = @panoramas.sort {|a,b| @panorama.bearing(a) <=> @panorama.bearing(b)}
   end
 

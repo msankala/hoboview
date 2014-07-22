@@ -82,14 +82,6 @@
 </div>
 <% end %>
   <script type="text/javascript">
-
-  function deg2rad(ang) {
-    return ang * Math.PI/180;
-  }
-  function rad2deg(ang) {
-    return ang * 180/Math.PI;
-  }
-
   var panorama_radius = 200;
   var linksphere_radius = 10;
 
@@ -146,7 +138,7 @@
     renderer = Detector.webgl ? new THREE.WebGLRenderer() : new THREE.CanvasRenderer();
     renderer.setSize(width, height);
 
-    texture = THREE.ImageUtils.loadTexture('<%= @panorama.image.url %>');
+    texture = THREE.ImageUtils.loadTexture('http://<%= request.host_with_port %><%= Hoboview::Application.config.relative_url_root || "" %><%= @panorama.image.url %>');
     sphere = new THREE.Mesh(
       new THREE.SphereGeometry(panorama_radius, 30, 30),
       new THREE.MeshBasicMaterial({

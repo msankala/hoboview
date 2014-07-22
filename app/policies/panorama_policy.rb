@@ -26,7 +26,8 @@ class PanoramaPolicy < ApplicationPolicy
   end
 
   def edit?
-    owned?
+    true
+    #owned?
   end
 
   def update?

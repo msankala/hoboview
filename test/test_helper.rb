@@ -4,7 +4,8 @@ require 'rails/test_help'
 
 class ActiveSupport::TestCase
   ActiveRecord::Migration.check_pending!
-
+  OmniAuth.config.test_mode = true
+  Paperclip::Attachment.default_options[:path] = ":rails_root/public/system/:rails_env/:class/:attachment/:id_partition/:filename"
   # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
   #
   # Note: You'll currently still have to declare fixtures explicitly in integration tests
